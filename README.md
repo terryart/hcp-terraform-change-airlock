@@ -233,7 +233,7 @@ The short version: this module reduces the chance that an AI or automation silen
 - [x] RailCall v2 tree signature valid
 - [x] current Station loader accepts and registers all 10 commands
 - [x] live HCP Terraform sandbox validation
-- [ ] public GitHub CI run
+- [x] public GitHub CI run
 - [ ] RailCall Marketplace moderation/publish
 - [ ] contest submission
 

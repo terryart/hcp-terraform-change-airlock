@@ -122,6 +122,15 @@ terryart/hcp-terraform-change-airlock — 10 command(s) registered
 
 This proves the current Station loader accepts the signed bundle and registers the declared command surface. It does **not** prove the HCP Terraform API behavior; that is covered by the live sandbox stage below.
 
+## Public GitHub CI
+
+GitHub Actions run 34247572658 on initial public commit 9176092090677c6fe0fb68d44393a5fd24e2ecc6 completed successfully on 2026-09-08.
+
+- unit (3.11) - success
+- unit (3.12) - success
+- unit (3.13) - success
+- workflow conclusion: success
+
 ## Live HCP Terraform sandbox validation
 
 **Status: completed on 2026-09-08 against a disposable zero-resource workspace.**
