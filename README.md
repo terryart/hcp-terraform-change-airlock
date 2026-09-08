@@ -8,7 +8,7 @@ A governance-first HCP Terraform integration for RailCall.
 
 The module uses the real HCP Terraform v2 API. It does not mock writes, read credentials from environment variables, retry ambiguous mutations, or expose force-style shortcuts that bypass normal provider safety.
 
-> Contest build: RailCall Developer Challenge Round 2 (`contest:round2`)
+> Contest build: RailCall 2026 Q3 (`contest:2026Q3`)
 
 ## Why this module exists
 
