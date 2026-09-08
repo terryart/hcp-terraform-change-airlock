@@ -1,7 +1,7 @@
 {
   "id": "terryart/hcp-terraform-change-airlock",
   "name": "HCP Terraform Change Airlock",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "manifest_version": 2,
   "publisher_pubkey": "4d343ee839cb653aa93bb6a092e046748ed086bc8d17e7a07d2d4cba357d29f0",
   "provider": "hcp-terraform",
