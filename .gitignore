@@ -1,0 +1,15 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.coverage
+htmlcov/
+.venv/
+venv/
+.env
+.env.*
+*.log
+reports/
+artifacts/
+.mypy_cache/
+.ruff_cache/
+RAILCALL_CONTEST_HANDOFF_*.md

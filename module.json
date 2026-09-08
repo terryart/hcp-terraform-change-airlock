@@ -1,0 +1,402 @@
+{
+  "id": "terryart/hcp-terraform-change-airlock",
+  "name": "HCP Terraform Change Airlock",
+  "version": "0.1.0",
+  "manifest_version": 2,
+  "publisher_pubkey": "4d343ee839cb653aa93bb6a092e046748ed086bc8d17e7a07d2d4cba357d29f0",
+  "provider": "hcp-terraform",
+  "provider_list": [
+    "hcp-terraform"
+  ],
+  "category": "Eng",
+  "description": "Governed HCP Terraform run and workspace operations for teams that want AI-assisted infrastructure workflows without silent applies.\n\nWHAT IT DOES: ten focused commands against the real HCP Terraform v2 API: verify the authenticated token, list workspaces, inspect run queues, inspect a run, queue a bounded run, apply/discard/cancel eligible runs, and lock/unlock workspaces.\n\nWHO IT IS FOR: platform, infrastructure, SRE, and engineering teams that want an agent to prepare and operate Terraform changes while preserving a human authorization boundary around every state-changing action.\n\nGOVERNANCE MODEL: every command uses RailCall's vault-only credential path, tight egress to app.terraform.io, preview, and signed receipts. Every mutation is write_requires_approval. Mutations preflight the provider's current state immediately before the write and refuse stale or invalid actions. There are no automatic write retries. A transport failure or ambiguous provider response is reported as UNKNOWN rather than success.\n\nAUTO-APPLY GUARD: HCP Terraform's auto-apply setting applies to API-created runs. To prevent one RailCall approval from silently turning into an unreviewed infrastructure apply, create_run refuses plan_and_apply when workspace auto-apply is enabled. Operators must disable auto-apply or choose a non-applying run mode first.\n\nBOUNDED SURFACE: create_run exposes only plan_and_apply, plan_only, save_plan, and refresh_only. Destroy runs, force-cancel, force-execute, force-unlock, and workspace deletion are intentionally absent from v0.1 because they bypass or weaken normal provider safety paths.\n\nPROVIDER HONESTY: HCP Terraform intentionally returns 404 for both nonexistent and unauthorized resources; the module preserves that ambiguity. Apply/discard/cancel return 'queued_not_completed' after HTTP 202 rather than claiming the action finished. Unlock HTTP 503 is surfaced without auto-retry because HashiCorp documents it as a temporary state-version finalization condition.\n\ncontest:round2",
+  "homepage": "https://github.com/terryart/hcp-terraform-change-airlock",
+  "tests_url": "https://github.com/terryart/hcp-terraform-change-airlock/actions",
+  "credential_spec": {
+    "provider": "hcp-terraform",
+    "category": "Infrastructure",
+    "name": "HCP Terraform API token",
+    "required": [
+      "HCP_TERRAFORM_TOKEN"
+    ],
+    "optional": [],
+    "shape": "dict",
+    "risk": "high",
+    "read_write": "write"
+  },
+  "allowed_destinations": [
+    {
+      "provider": "hcp-terraform",
+      "hosts": [
+        "app.terraform.io"
+      ]
+    }
+  ],
+  "requires": {
+    "network": [
+      "app.terraform.io"
+    ],
+    "subprocess": false,
+    "filesystem_writes": []
+  },
+  "commands": [
+    {
+      "id": "hcp_terraform.verify_connection",
+      "title": "Verify HCP Terraform connection",
+      "description": "Resolve the vault token and identify the authenticated HCP Terraform resource without returning the token or account email.",
+      "provider": "hcp-terraform",
+      "risk": "medium",
+      "mode": "read",
+      "requires": [
+        "HCP_TERRAFORM_TOKEN"
+      ],
+      "preview": true,
+      "receipt_required": true,
+      "input_schema": {},
+      "output_schema": {
+        "account_id": "string",
+        "username": "string",
+        "is_service_account": "boolean",
+        "auth_method": "string",
+        "authenticated_resource_id": "string",
+        "authenticated_resource_type": "string",
+        "http_status": "number"
+      }
+    },
+    {
+      "id": "hcp_terraform.list_workspaces",
+      "title": "List HCP Terraform workspaces",
+      "description": "List a bounded page of workspaces with lock, auto-apply, execution-mode, Terraform-version, and resource-count context.",
+      "provider": "hcp-terraform",
+      "risk": "medium",
+      "mode": "read",
+      "requires": [
+        "HCP_TERRAFORM_TOKEN"
+      ],
+      "preview": true,
+      "receipt_required": true,
+      "input_schema": {
+        "organization": {
+          "type": "string",
+          "required": true,
+          "minLength": 1
+        },
+        "page": {
+          "type": "number",
+          "required": false,
+          "minimum": 1,
+          "default": 1
+        },
+        "page_size": {
+          "type": "number",
+          "required": false,
+          "minimum": 1,
+          "maximum": 50,
+          "default": 20
+        }
+      },
+      "output_schema": {
+        "organization": "string",
+        "returned_count": "number",
+        "current_page": "number",
+        "total_count": "number",
+        "total_pages": "number",
+        "workspaces_json": "string",
+        "http_status": "number"
+      }
+    },
+    {
+      "id": "hcp_terraform.list_runs",
+      "title": "List HCP Terraform workspace runs",
+      "description": "Inspect a bounded page of runs, including plan-only runs by default, with status, operation, and currently advertised safe actions.",
+      "provider": "hcp-terraform",
+      "risk": "medium",
+      "mode": "read",
+      "requires": [
+        "HCP_TERRAFORM_TOKEN"
+      ],
+      "preview": true,
+      "receipt_required": true,
+      "input_schema": {
+        "workspace_id": {
+          "type": "string",
+          "required": true,
+          "minLength": 1
+        },
+        "page": {
+          "type": "number",
+          "required": false,
+          "minimum": 1,
+          "default": 1
+        },
+        "page_size": {
+          "type": "number",
+          "required": false,
+          "minimum": 1,
+          "maximum": 30,
+          "default": 20
+        },
+        "include_plan_only": {
+          "type": "boolean",
+          "required": false,
+          "default": true
+        }
+      },
+      "output_schema": {
+        "workspace_id": "string",
+        "returned_count": "number",
+        "runs_json": "string",
+        "http_status": "number"
+      }
+    },
+    {
+      "id": "hcp_terraform.get_run",
+      "title": "Inspect one HCP Terraform run",
+      "description": "Read one run and expose provider status, operation, plan/apply references, and the provider's current confirm/discard/cancel capabilities.",
+      "provider": "hcp-terraform",
+      "risk": "medium",
+      "mode": "read",
+      "requires": [
+        "HCP_TERRAFORM_TOKEN"
+      ],
+      "preview": true,
+      "receipt_required": true,
+      "input_schema": {
+        "run_id": {
+          "type": "string",
+          "required": true,
+          "minLength": 1
+        }
+      },
+      "output_schema": {
+        "run_id": "string",
+        "status": "string",
+        "operation": "string",
+        "message": "string",
+        "has_changes": "boolean",
+        "created_at": "string",
+        "source": "string",
+        "workspace_id": "string",
+        "plan_id": "string",
+        "apply_id": "string",
+        "is_confirmable": "boolean",
+        "is_discardable": "boolean",
+        "is_cancelable": "boolean",
+        "http_status": "number"
+      }
+    },
+    {
+      "id": "hcp_terraform.create_run",
+      "title": "Queue a governed HCP Terraform run",
+      "description": "Preflight the workspace, refuse unsafe auto-apply or lock conditions, then queue one non-destroy run using an optional existing configuration version.",
+      "provider": "hcp-terraform",
+      "risk": "high",
+      "mode": "write_requires_approval",
+      "requires": [
+        "HCP_TERRAFORM_TOKEN"
+      ],
+      "preview": true,
+      "receipt_required": true,
+      "input_schema": {
+        "workspace_id": {
+          "type": "string",
+          "required": true,
+          "minLength": 1
+        },
+        "operation": {
+          "type": "string",
+          "required": true,
+          "enum": [
+            "plan_and_apply",
+            "plan_only",
+            "save_plan",
+            "refresh_only"
+          ]
+        },
+        "message": {
+          "type": "string",
+          "required": false,
+          "maxLength": 500
+        },
+        "configuration_version_id": {
+          "type": "string",
+          "required": false,
+          "maxLength": 128
+        }
+      },
+      "output_schema": {
+        "run_id": "string",
+        "status": "string",
+        "operation": "string",
+        "requested_operation": "string",
+        "workspace_id": "string",
+        "workspace_auto_apply": "boolean",
+        "workspace_locked": "boolean",
+        "governance_guard": "string",
+        "http_status": "number"
+      }
+    },
+    {
+      "id": "hcp_terraform.apply_run",
+      "title": "Apply a confirmed HCP Terraform run",
+      "description": "Re-read the run, require HCP Terraform to advertise it as confirmable, verify the workspace is unlocked, then queue apply. Returns queued_not_completed after provider HTTP 202.",
+      "provider": "hcp-terraform",
+      "risk": "high",
+      "mode": "write_requires_approval",
+      "requires": [
+        "HCP_TERRAFORM_TOKEN"
+      ],
+      "preview": true,
+      "receipt_required": true,
+      "input_schema": {
+        "run_id": {
+          "type": "string",
+          "required": true,
+          "minLength": 1
+        },
+        "comment": {
+          "type": "string",
+          "required": false,
+          "maxLength": 500
+        }
+      },
+      "output_schema": {
+        "run_id": "string",
+        "action": "string",
+        "queued": "boolean",
+        "preflight_status": "string",
+        "provider_confirmation": "string",
+        "http_status": "number"
+      }
+    },
+    {
+      "id": "hcp_terraform.discard_run",
+      "title": "Discard an eligible HCP Terraform run",
+      "description": "Re-read the run and queue discard only when HCP Terraform currently advertises it as discardable. Returns queued_not_completed after HTTP 202.",
+      "provider": "hcp-terraform",
+      "risk": "medium",
+      "mode": "write_requires_approval",
+      "requires": [
+        "HCP_TERRAFORM_TOKEN"
+      ],
+      "preview": true,
+      "receipt_required": true,
+      "input_schema": {
+        "run_id": {
+          "type": "string",
+          "required": true,
+          "minLength": 1
+        },
+        "comment": {
+          "type": "string",
+          "required": false,
+          "maxLength": 500
+        }
+      },
+      "output_schema": {
+        "run_id": "string",
+        "action": "string",
+        "queued": "boolean",
+        "preflight_status": "string",
+        "provider_confirmation": "string",
+        "http_status": "number"
+      }
+    },
+    {
+      "id": "hcp_terraform.cancel_run",
+      "title": "Cancel an active HCP Terraform run",
+      "description": "Re-read the run and queue a normal interrupt only when HCP Terraform advertises it as cancelable. Force-cancel is intentionally not exposed.",
+      "provider": "hcp-terraform",
+      "risk": "high",
+      "mode": "write_requires_approval",
+      "requires": [
+        "HCP_TERRAFORM_TOKEN"
+      ],
+      "preview": true,
+      "receipt_required": true,
+      "input_schema": {
+        "run_id": {
+          "type": "string",
+          "required": true,
+          "minLength": 1
+        },
+        "comment": {
+          "type": "string",
+          "required": false,
+          "maxLength": 500
+        }
+      },
+      "output_schema": {
+        "run_id": "string",
+        "action": "string",
+        "queued": "boolean",
+        "preflight_status": "string",
+        "provider_confirmation": "string",
+        "http_status": "number"
+      }
+    },
+    {
+      "id": "hcp_terraform.lock_workspace",
+      "title": "Lock an HCP Terraform workspace",
+      "description": "Preflight workspace lock state, refuse duplicate locks, then lock with an explicit operator reason.",
+      "provider": "hcp-terraform",
+      "risk": "medium",
+      "mode": "write_requires_approval",
+      "requires": [
+        "HCP_TERRAFORM_TOKEN"
+      ],
+      "preview": true,
+      "receipt_required": true,
+      "input_schema": {
+        "workspace_id": {
+          "type": "string",
+          "required": true,
+          "minLength": 1
+        },
+        "reason": {
+          "type": "string",
+          "required": false,
+          "maxLength": 500
+        }
+      },
+      "output_schema": {
+        "workspace_id": "string",
+        "name": "string",
+        "locked": "boolean",
+        "locked_reason": "string",
+        "action": "string",
+        "reason": "string",
+        "http_status": "number"
+      }
+    },
+    {
+      "id": "hcp_terraform.unlock_workspace",
+      "title": "Unlock an HCP Terraform workspace",
+      "description": "Preflight workspace lock state and request a normal unlock. No force-unlock and no automatic retry on the provider's documented state-finalization 503 condition.",
+      "provider": "hcp-terraform",
+      "risk": "medium",
+      "mode": "write_requires_approval",
+      "requires": [
+        "HCP_TERRAFORM_TOKEN"
+      ],
+      "preview": true,
+      "receipt_required": true,
+      "input_schema": {
+        "workspace_id": {
+          "type": "string",
+          "required": true,
+          "minLength": 1
+        }
+      },
+      "output_schema": {
+        "workspace_id": "string",
+        "name": "string",
+        "locked": "boolean",
+        "locked_reason": "string",
+        "action": "string",
+        "http_status": "number"
+      }
+    }
+  ],
+  "license_required": false
+}
